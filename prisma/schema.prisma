@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator zod {
+  provider                         = "zod-prisma-types"
+  useMultipleFiles                 = true
+  writeBarrelFiles                 = false
+  addInputTypeValidation           = true
+  createOptionalDefaultValuesTypes = true
+  createRelationValuesTypes        = true
+  createPartialTypes               = true
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int                        @id @default(autoincrement())
+  /// @zod.string.min(1, { message: "1文字以上で入力してください" }).max(30, { message: "30文字未満で入力してください" }).unique({ message: "このユーザー名はすでに使用されています" })
+  username      String                     @unique @db.VarChar(30)
+  /// @zod.string.email().max(255, { message: "255字未満で入力してください" }).unique({ message: "このメールアドレスはすでに使用されています" })
+  email         String                     @unique @db.VarChar(255)
+  password      String
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  updatedAt     DateTime                   @default(now()) @updatedAt @map("updated_at")
+  articles      Article[]
+  organizations UserOrganizationRelation[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Organization {
+  id        Int                        @id @default(autoincrement())
+  /// @zod.string.min(1, { message: "1文字以上で入力してください" }).max(30, { message: "30文字未満で入力してください" }).unique({ message: "この組織名はすでに使用されています" })
+  name      String                     @unique @db.VarChar(30)
+  createdAt DateTime                   @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  articles  Article[]
+  users     UserOrganizationRelation[]
+
+  @@index([name])
+  @@map("organizations")
+}
+
+model Article {
+  id             Int                  @id @default(autoincrement())
+  /// @zod.string.min(1, { message: "1文字以上で入力してください" }).max(100, { message: "100文字未満で入力してください" })
+  title          String               @db.VarChar(100)
+  /// @zod.string.min(1, { message: "1文字以上で入力してください" })
+  content        String               @db.Text
+  userId         Int                  @map("user_id")
+  organizationId Int?                 @map("organization_id")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @default(now()) @updatedAt @map("updated_at")
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  tags           ArticleTagRelation[]
+
+  @@index([title])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([createdAt(sort: Desc)])
+  @@map("articles")
+}
+
+model Tag {
+  id        Int                  @id @default(autoincrement())
+  /// @zod.string.min(1, { message: "1文字以上で入力してください" }).max(30, { message: "30文字未満で入力してください" }).unique({ message: "このタグ名はすでに使用されています" })
+  name      String               @unique @db.VarChar(30)
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  articles  ArticleTagRelation[]
+
+  @@index([name])
+  @@map("tags")
+}
+
+model ArticleTagRelation {
+  articleId Int     @map("article_id")
+  tagId     Int     @map("tag_id")
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@map("article_tag_relations")
+}
+
+model UserOrganizationRelation {
+  userId         Int          @map("user_id")
+  organizationId Int          @map("organization_id")
+  role           Role
+  createdAt      DateTime     @default(now()) @map("created_at")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId])
+  @@map("user_organization_relations")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
